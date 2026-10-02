@@ -26,6 +26,10 @@ via the Otty port).
   transcript: `read`/`bash`/`grep`/`find`/`ls` collapse to one line
   (e.g. `$ pnpm test` → `✓ done (12 lines)`), full content on expand
   (`ctrl+e`). `edit`/`write` diffs stay visible.
+- **Diff view** (`extensions/diff-view.ts`) — `edit` renders side-by-side
+  old | new columns with syntax colors (falls back to unified below
+  90 cols). Past 100 rows collapses to `... N more — view in PR`;
+  `ctrl+e` expands.
 
 Subscription limit windows (5h/weekly) stay hidden: the `meta`
 provider exposes no programmatic quota surface, and the extension
@@ -54,7 +58,8 @@ pi -e ./extensions/one-dark-pro-glass.ts --theme ./themes --use-theme one-dark-p
 ├── themes/one-dark-pro-glass.json
 ├── extensions/one-dark-pro-glass.ts   # statusline + input block
 ├── extensions/compact-output.ts       # one-line tool results
-└── docs/spec.md            # design spec + decision log (D1–D6)
+├── extensions/diff-view.ts            # side-by-side edit diffs
+└── docs/spec.md            # design spec + decision log (D1–D7)
 ```
 
 No runtime dependencies. Host packages

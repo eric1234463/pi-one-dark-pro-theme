@@ -10,7 +10,8 @@ background-filled input block + compact tool output.
 ├── themes/one-dark-pro-glass.json
 ├── extensions/one-dark-pro-glass.ts   # input block + custom footer
 ├── extensions/compact-output.ts       # one-line read-only tool results
-├── docs/spec.md                  # design spec + decision log (D1–D6)
+├── extensions/diff-view.ts            # side-by-side edit diffs
+├── docs/spec.md                  # design spec + decision log (D1–D7)
 └── README.md
 ```
 
@@ -21,7 +22,7 @@ background-filled input block + compact tool output.
   `../paseo-one-dark-pro-glass-theme/index.client.tsx`.
 - Pi theme doc: `pi.dev/docs/latest/themes`. Built-in reference:
   `dark.json` in the pi repo (`packages/coding-agent/src/modes/interactive/theme/`).
-- Decisions D1–D6 live in `docs/spec.md`. Update the spec when a
+- Decisions D1–D7 live in `docs/spec.md`. Update the spec when a
   decision changes; keep README's feature list in sync.
 
 ## Theme rules (`themes/`)
@@ -57,7 +58,14 @@ background-filled input block + compact tool output.
     Battery hidden when unavailable. Limits segment hidden until
     `fetchLimits()` has a real source (D4, spec §6.3) — never `0%`.
   - Guard everything behind `ctx.hasUI`; non-TUI returns early.
-- `compact-output.ts`:
+- `diff-view.ts`:
+  - Same-name `registerTool` over `createEditToolDefinition(cwd)` +
+    `renderShell: "self"`. Overrides `edit` only.
+  - Columns lay out in a custom `Component.render(width)` at the real
+    terminal width; never pre-render fixed-width `Text` (it word-wraps
+    and breaks alignment). <90 cols → unified fallback.
+  - Row cap 100 + `... N more — view in PR`; `ctrl+e` expands. File
+    path from `context.args`.
   - Same-name `registerTool` over `create*ToolDefinition(cwd)`,
     overriding only `renderCall`/`renderResult` + `renderShell: "self"`.
     Execution untouched. Only read-only tools (`read`/`bash`/`grep`/

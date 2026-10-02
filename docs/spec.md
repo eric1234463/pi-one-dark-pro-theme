@@ -212,3 +212,26 @@ select theme in `/settings`, done.
   line in error color. Expanded (`ctrl+e`): first 15–20 dim lines +
   `... N more`.
 - Verified: overridden definitions execute correctly in `-p` mode.
+
+## 11. Side-by-side edit diffs (D7)
+
+- New file `extensions/diff-view.ts`, separate manifest entry
+  (independently toggleable via `pi config`). Overrides `edit` only;
+  `write` stays default.
+- Same-name `registerTool` over `createEditToolDefinition(cwd)` +
+  `renderShell: "self"`. Parses `details.diff` (`+<num>` / `-<num>` /
+  context / `...` separators) and pairs del/add runs into old | new
+  rows. Removed lines red, added green (theme `toolDiff*`); context
+  dim full-width.
+- Syntax colors: each side highlighted as one block via
+  `highlightCode(text, getLanguageFromPath(path))`, mapped back per
+  line (line count preserved). Unknown language → plain.
+- Layout happens in a custom `Component.render(width)` at the real
+  terminal width — never pre-render to fixed-width `Text` (`Text`
+  word-wraps and would break column alignment). Below 90 cols falls
+  back to unified single-column.
+- Row cap 100 (D7): collapsed shows first 100 rows +
+  `... N more — view in PR`; `ctrl+e` shows all. Path for file args
+  comes from `context.args`, not the result.
+- Verified: real `edit` in `-p` mode applies + renders without error.
+  TUI column alignment needs eyeball check.
