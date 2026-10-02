@@ -232,6 +232,9 @@ select theme in `/settings`, done.
 - Pi paints every tool block with `toolSuccessBg` behind `renderShell:
   "self"` too, so that token is neutral `raised #101214` (was a green
   tint that muddied syntax colors). `toolErrorBg` keeps its red tint.
+- Del/add rows get subtle tints: 15% `mixColors` of the line color
+  toward `userMessageBg`, computed live per render so theme switches
+  follow. Gutter + tint carry the signal; code keeps syntax colors.
 - Syntax colors: each side highlighted as one block via
   `highlightCode(text, getLanguageFromPath(path))`, mapped back per
   line (line count preserved). Unknown language → plain.
