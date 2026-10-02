@@ -22,6 +22,10 @@ via the Otty port).
 - **Input block** — accent `─` borders on a `#101214` background fill,
   1-cell inner padding (adjustable via `/settings` → `editorPaddingX`,
   0–3).
+- **Compact output** (`extensions/compact-output.ts`) — result-oriented
+  transcript: `read`/`bash`/`grep`/`find`/`ls` collapse to one line
+  (e.g. `$ pnpm test` → `✓ done (12 lines)`), full content on expand
+  (`ctrl+e`). `edit`/`write` diffs stay visible.
 
 Subscription limit windows (5h/weekly) stay hidden: the `meta`
 provider exposes no programmatic quota surface, and the extension
@@ -48,8 +52,9 @@ pi -e ./extensions/one-dark-pro-glass.ts --theme ./themes --use-theme one-dark-p
 ```text
 ├── package.json            # pi-package manifest
 ├── themes/one-dark-pro-glass.json
-├── extensions/one-dark-pro-glass.ts
-└── docs/spec.md            # design spec + decision log (D1–D5)
+├── extensions/one-dark-pro-glass.ts   # statusline + input block
+├── extensions/compact-output.ts       # one-line tool results
+└── docs/spec.md            # design spec + decision log (D1–D6)
 ```
 
 No runtime dependencies. Host packages

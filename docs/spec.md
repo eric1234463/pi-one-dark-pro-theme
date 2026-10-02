@@ -11,10 +11,13 @@ Scope is deliberately narrow:
 1. `themes/one-dark-pro-glass.json` — dark Pi theme ported from the
    same source as `paseo-one-dark-pro-glass-theme` (upstream
    `bukitoka/one-dark-pro-max` / Otty `one-dark-pro-glass`).
-2. `extensions/one-dark-pro-glass.ts` — borderless editor (zero side
-   padding, no top/bottom border lines) + custom plain-segment footer
-   in starship style (`dir | branch status | model | context | cost |
+2. `extensions/one-dark-pro-glass.ts` — input block (accent borders on
+   `#101214` fill, 1-cell padding) + custom plain-segment footer in
+   starship style (`dir | branch status | model | context | cost |
    limits | time`).
+3. `extensions/compact-output.ts` — result-oriented transcript:
+   `read`/`bash`/`grep`/`find`/`ls` collapse to one line, `edit`/`write`
+   diffs stay visible.
 
 Decisions (user-confirmed):
 
@@ -22,7 +25,9 @@ Decisions (user-confirmed):
 - D2 — input box: ~~borderless~~ superseded by D5 below.
 - D3 — extras: git status counts, session cost, time + battery — all on.
 - D5 — input box: bordered block with background fill (user revision
-  of D2). Accent `─` borders on `selectedBg`; full-block bg fill.
+  of D2). Accent `─` borders on `userMessageBg`; full-block bg fill.
+- D6 — compact output: read-only tools collapse to one line;
+  edit/write diffs stay visible.
 
 ## 2. Non-goals
 
@@ -41,7 +46,8 @@ pi-one-dark-pro-glass-theme/
 ├── themes/
 │   └── one-dark-pro-glass.json
 ├── extensions/
-│   └── one-dark-pro-glass.ts  # borderless editor + starship footer
+│   ├── one-dark-pro-glass.ts  # input block + starship footer
+│   └── compact-output.ts       # one-line read-only tool results
 ├── docs/
 │   └── spec.md             # this file
 └── README.md
@@ -176,22 +182,33 @@ select theme in `/settings`, done.
 
 ## 8. Acceptance
 
-1. `pi -e <this-package>` in a git repo shows One Dark Pro Glass
-   colors, tight input (no side padding), footer line 1
-   `~/proj (main)`, line 2 with `↑ ↓ R W CH% …ctx%… model • level`.
-2. On a subscription provider exposing both windows, a third footer
-   line reads `5h N% · W N%`; on API-key-only providers the line is
-   absent (not `0%`).
-3. Narrow (80-col) resize: no wrapped/overflowing statusline, no crash.
-4. `/reload` with theme/extension changed: no errors, rendering intact.
-5. Non-TUI (`pi -p "hi"`): no extension errors.
+1. Fresh `pi` in a git repo: glass colors, `#101214` input block with
+   1-cell padding, one-line footer
+   `󰉋 dir |  branch | model · effort | ctx% CH% | $cost | time`.
+2. Tool calls: `read`/`bash`/`grep`/`find`/`ls` render one line
+   (`✓ done (N lines)`); `ctrl+e` expands full output; `edit` shows
+   the diff.
+3. Narrow (80-col) resize: no wrapped/overflowing statusline.
+4. `/reload` after changes: no errors. Non-TUI (`pi -p`): no errors.
 
-## 9. Open questions
+## 9. Open questions — all answered
 
-- O1: Which provider(s) do you actually use in Pi (Claude/Codex/Grok/
-  Kimi)? Decides the limits-spike target. Assume: whatever Pi's
-  default auth surfaces first; confirm before build.
-- O2: "effort" = thinking level (`minimal..max`)? Assume yes (matches
-  footer `• {level}`); say if you mean something else.
-- O3: Limits as used-% vs remaining-%? Spec uses used-% (matches Paseo
-  pill semantics); one-word confirm.
+- O1: `meta/muse-spark` (→ D4).
+- O2: yes, effort = thinking level.
+- O3: used-% (moot while limits hidden).
+
+## 10. Compact output (D6)
+
+- New file `extensions/compact-output.ts`, separate manifest entry so
+  it can be disabled independently via `pi config`.
+- Same-name `registerTool` replaces the built-ins; originals are
+  spread in, only `renderCall`/`renderResult` overridden +
+  `renderShell: "self"` (no box chrome). Execution untouched; only
+  read-only tools are overridden, so file-mutation queue semantics
+  cannot be affected.
+- Collapsed: `read path` → `N lines`; `$ cmd` → `✓ done (N lines)` /
+  `✗ exit N (M lines)`; `grep` → `N matches` / `no matches`;
+  `find` → `N paths`; `ls` → `N entries`. Errors show their first
+  line in error color. Expanded (`ctrl+e`): first 15–20 dim lines +
+  `... N more`.
+- Verified: overridden definitions execute correctly in `-p` mode.

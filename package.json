@@ -10,7 +10,7 @@
 		"@earendil-works/pi-tui": "*"
 	},
 	"pi": {
-		"extensions": ["./extensions/one-dark-pro-glass.ts"],
+		"extensions": ["./extensions/one-dark-pro-glass.ts", "./extensions/compact-output.ts"],
 		"themes": ["./themes/one-dark-pro-glass.json"]
 	}
 }
