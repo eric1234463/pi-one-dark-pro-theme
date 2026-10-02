@@ -1,0 +1,16 @@
+{
+	"name": "pi-one-dark-pro-glass-theme",
+	"version": "0.1.0",
+	"description": "One Dark Pro Glass theme plus starship-style statusline and input block for Pi",
+	"repository": "github:eric1234463/pi-one-dark-pro-theme",
+	"license": "MIT",
+	"keywords": ["pi-package"],
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"@earendil-works/pi-tui": "*"
+	},
+	"pi": {
+		"extensions": ["./extensions/one-dark-pro-glass.ts"],
+		"themes": ["./themes/one-dark-pro-glass.json"]
+	}
+}
