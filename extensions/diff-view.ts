@@ -9,7 +9,7 @@ import {
 	highlightCode,
 } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
-import { Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { mixColors, Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 // Side-by-side diff view for edits.
 //
@@ -112,6 +112,10 @@ class SideBySideDiff implements Component {
 		const narrow = width < MIN_WIDTH;
 		const leftW = Math.floor((width - 3) / 2);
 		const rightW = width - 3 - leftW;
+		// Subtle GitHub-style tints, mixed live so theme switches follow.
+		const delBg = mixColors(theme.colors.toolDiffRemoved, theme.colors.userMessageBg, 0.15);
+		const addBg = mixColors(theme.colors.toolDiffAdded, theme.colors.userMessageBg, 0.15);
+		const tint = (line: string, bg: typeof delBg): string => theme.style(line, { bg });
 
 		const out: string[] = [this.head];
 		for (const row of this.rows) {
@@ -126,14 +130,14 @@ class SideBySideDiff implements Component {
 			const leftRaw = row.left ? { num: row.left.num, content: row.left.content } : undefined;
 			const rightRaw = row.right ? { num: row.right.num, content: row.right.content } : undefined;
 			if (narrow) {
-				if (leftRaw) out.push(gutterLine(theme, "-", leftRaw, "toolDiffRemoved", width));
-				if (rightRaw) out.push(gutterLine(theme, "+", rightRaw, "toolDiffAdded", width));
+				if (leftRaw) out.push(tint(gutterLine(theme, "-", leftRaw, "toolDiffRemoved", width), delBg));
+				if (rightRaw) out.push(tint(gutterLine(theme, "+", rightRaw, "toolDiffAdded", width), addBg));
 				continue;
 			}
 			const left = leftRaw
-				? padCell(gutterLine(theme, "-", leftRaw, "toolDiffRemoved", leftW), leftW)
+				? tint(padCell(gutterLine(theme, "-", leftRaw, "toolDiffRemoved", leftW), leftW), delBg)
 				: " ".repeat(leftW);
-			const right = rightRaw ? gutterLine(theme, "+", rightRaw, "toolDiffAdded", rightW) : "";
+			const right = rightRaw ? tint(gutterLine(theme, "+", rightRaw, "toolDiffAdded", rightW), addBg) : "";
 			out.push(`${left}${sep}${right}`);
 		}
 		if (this.hidden > 0) {
