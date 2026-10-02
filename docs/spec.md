@@ -21,9 +21,14 @@ Scope is deliberately narrow:
 
 Decisions (user-confirmed):
 
-- D1 — footer style: plain segments, no powerline blocks.
+- D1 — footer style: ~~plain segments~~ superseded by D8 below.
 - D2 — input box: ~~borderless~~ superseded by D5 below.
 - D3 — extras: git status counts, session cost, time + battery — all on.
+- D8 — footer style: powerline blocks (user revision of D1).
+  surface0 user block →  → surface1 content block →  → surface0
+  time block → closing . Block colors verbatim from
+  starship `one_dark_pro_glass` palette via `parseColor` +
+  `theme.style(text, { fg, bg })` (hex strings are NOT `Color`).
 - D5 — input box: bordered block with background fill (user revision
   of D2). Accent `─` borders on `userMessageBg`; full-block bg fill.
 - D6 — compact output: read-only tools collapse to one line;
@@ -121,21 +126,23 @@ pi-one-dark-pro-glass-theme/
 
 ## 6. Statusline
 
-### 6.1 Layout: custom plain-segment footer (D1, D3)
+### 6.1 Layout: powerline blocks (D8, supersedes D1)
 
-One line, ` | ` (dim) separators, Nerd Font glyphs (JetBrainsMono Nerd
-Font in use):
+One line,  (U+E0B4) transitions, Nerd Font glyphs. Block order and
+colors mirror the starship bar in the screenshot:
 
 ```text
-󰉋 ~/proj |  main 󰷫2 1 | meta/muse-spark-1.3 · high | ctx 42%/200k CH91% | $0.042 | 5h 62% · W 31% | 󰥔 02:45 󰁹 87%
+ eric  󰉋 ~/proj   main 󰷫2 1  muse-spark-1.3 · high  ctx 42% CH91%  $0.042   󰥔 02:45 󰁹 87% 
 ```
 
-Field colors mirror starship: dir accent-blue, branch success-green,
-status counts warning-orange, model/effort muted, ctx % by threshold
-(>90 error, >70 warning), cost dim, time accent-blue. `provider/`
-prefix only when >1 provider (via
-`footerData.getAvailableProviderCount()`). Right-side overflow is
-truncated (time drops first). Git status comes from
+Blocks: user (mono0 on surface0) →  → content items on surface1
+(dir blue, branch green, model purple, ctx green/yellow/red by
+threshold, CH/cost dim) →  → time+battery (blue on surface0) →
+closing . Same-bg items are space-separated inside one block,
+like the terminal bar. `provider/` prefix only when >1 provider.
+Overflow truncates from the right (time drops first).
+
+Git status comes from
 `git status --porcelain=v1 -b` (staged/modified/untracked/ahead/behind,
 zero buckets omitted); branch itself from `footerData.getGitBranch()`.
 Time is HKT; battery via `pmset` (macOS) / sysfs (Linux), hidden when
@@ -152,9 +159,7 @@ change, plus 10 s interval.
   or API-key billing (no subscription window) hides the segment.
 - Near-limit color: `≥90%` error, `≥70%` warning, else dim (reuse theme
   helpers; compute outside render path).
-- Truncation: single line, sanitized (no `\r\n\t`), Pi truncates to
-  width. Key `limits` sorts alphabetically among extension statuses —
-  acceptable for v1.
+- Truncation: single line, ANSI-aware via `truncateToWidth`.
 
 ### 6.3 Limits data source — meta spike DONE (D4: keep hidden)
 

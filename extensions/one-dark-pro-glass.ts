@@ -5,15 +5,30 @@ import {
 	type KeybindingsManager,
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { Component, EditorTheme, TUI } from "@earendil-works/pi-tui";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import type { Component, Color, EditorTheme, TUI } from "@earendil-works/pi-tui";
+import { parseColor, truncateToWidth } from "@earendil-works/pi-tui";
 
 // One Dark Pro Glass statusline + input block.
 //
-// Footer: plain starship-style segments (`dir | branch status | model |
-// context | cost | limits | time`), no powerline blocks. Limits segment
-// is hidden until a provider usage source exists (see fetchLimits).
+// Footer: powerline blocks mirroring the starship bar (surface0 user
+// block, surface1 content block, surface0 time block,  separators).
+// Limits segment is hidden until a provider usage source exists (see
+// fetchLimits).
 // Editor: 1-cell side padding, accent borders, full-block userMessageBg fill.
+
+// Starship one_dark_pro_glass palette (verbatim from starship.toml).
+const pal: Record<string, Color> = {
+	mono0: parseColor("#d7dae0"),
+	surface0: parseColor("#2c313a"),
+	surface1: parseColor("#3e4452"),
+	green: parseColor("#98c379"),
+	blue: parseColor("#61afef"),
+	orange: parseColor("#d19a66"),
+	purple: parseColor("#c678dd"),
+	yellow: parseColor("#e5c07b"),
+	red: parseColor("#ff616e"),
+	dim: parseColor("#828997"),
+};
 
 const timeFmt = new Intl.DateTimeFormat("en-HK", {
 	hour: "2-digit",
@@ -204,15 +219,25 @@ export default function (pi: ExtensionAPI) {
 				},
 				invalidate() {},
 				render(width: number): string[] {
-					const sep = theme.fg("dim", " | ");
-					const seg: string[] = [];
+					const block = (text: string, fg: Color, bg: Color): string =>
+						theme.style(` ${text} `, { fg, bg, bold: true });
+					const trans = (from: Color, to: Color): string =>
+						theme.style("", { fg: from, bg: to });
 
-					seg.push(theme.fg("accent", `󰉋 ${shortCwd(ctx.cwd)}`));
+					const user = process.env.USER ?? "eric";
+					let line = block(`${user}`, pal.mono0, pal.surface0);
+					line += trans(pal.surface0, pal.surface1);
+
+					line += block(`󰉋 ${shortCwd(ctx.cwd)}`, pal.blue, pal.surface1);
 
 					const branch = footerData.getGitBranch();
 					if (branch) {
 						const gitText = git.status ? ` ${branch} ${git.status}` : ` ${branch}`;
-						seg.push(theme.fg("success", `${gitText}`));
+						line += theme.style(` ${gitText} `, {
+							fg: pal.green,
+							bg: pal.surface1,
+							bold: true,
+						});
 					}
 
 					if (ctx.model) {
@@ -220,35 +245,31 @@ export default function (pi: ExtensionAPI) {
 							footerData.getAvailableProviderCount() > 1 ? `(${ctx.model.provider}) ` : "";
 						const thinking = pi.getThinkingLevel();
 						const effort = thinking === "off" ? "thinking off" : thinking;
-						seg.push(theme.fg("muted", `${multi}${ctx.model.id} · ${effort}`));
+						line += block(`${multi}${ctx.model.id} · ${effort}`, pal.purple, pal.surface1);
 					}
 
 					const usage = ctx.getContextUsage();
 					const window = usage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
 					if (usage && usage.percent !== null && usage.percent !== undefined) {
 						const pct = Math.round(usage.percent);
-						const text = `ctx ${pct}%/${formatTokens(window)}`;
-						seg.push(
-							pct > 90
-								? theme.fg("error", text)
-								: pct > 70
-									? theme.fg("warning", text)
-									: theme.fg("muted", text),
-						);
+						const fg = pct > 90 ? pal.red : pct > 70 ? pal.yellow : pal.green;
+						line += block(`ctx ${pct}%/${formatTokens(window)}`, fg, pal.surface1);
 					}
 					const ch = cacheHitRate(ctx);
-					if (ch !== undefined) seg.push(theme.fg("muted", `CH${ch.toFixed(0)}%`));
+					if (ch !== undefined) line += block(`CH${ch.toFixed(0)}%`, pal.dim, pal.surface1);
 
 					const cost = sessionCost(ctx);
-					if (cost > 0) seg.push(theme.fg("dim", `$${cost.toFixed(3)}`));
+					if (cost > 0) line += block(`$${cost.toFixed(3)}`, pal.dim, pal.surface1);
 
-					if (limits) seg.push(theme.fg("dim", limits));
+					if (limits) line += block(limits, pal.dim, pal.surface1);
 
+					line += trans(pal.surface1, pal.surface0);
 					const tail: string[] = [`󰥔 ${timeFmt.format(new Date())}`];
 					if (battery.text) tail.push(battery.text);
-					seg.push(theme.fg("accent", tail.join(" ")));
+					line += block(tail.join(" "), pal.blue, pal.surface0);
+					line += theme.style("", { fg: pal.surface0 });
 
-					return [truncateToWidth(seg.join(sep), width)];
+					return [truncateToWidth(line, width)];
 				},
 			};
 		});

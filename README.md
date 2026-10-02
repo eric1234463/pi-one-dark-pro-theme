@@ -10,11 +10,12 @@ via the Otty port).
 
 - **Theme** (`themes/one-dark-pro-glass.json`) — near-black `#080909`
   glass palette, One Dark Pro syntax colors.
-- **Statusline** — plain starship-style footer segments:
+- **Statusline** — powerline footer blocks like the terminal bar:
 
-  ```text
-  󰉋 ~/proj |  main 󰷫2 1 | meta/muse-spark-1.3 · high | ctx 42% CH91% | $0.042 | 󰥔 02:45 󰁹 87%
-  ```
+```text
+ eric  ~/proj  branch status  model · effort  ctx 42% CH91%  $0.042   02:45 
+```
+(user on surface0, content on surface1, time on surface0)
 
   workdir, git branch + status counts, model + thinking level, context
   usage, cache-hit rate, session cost, HKT time + battery. Needs a Nerd
