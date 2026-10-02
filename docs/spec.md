@@ -226,8 +226,12 @@ select theme in `/settings`, done.
 - Same-name `registerTool` over `createEditToolDefinition(cwd)` +
   `renderShell: "self"`. Parses `details.diff` (`+<num>` / `-<num>` /
   context / `...` separators) and pairs del/add runs into old | new
-  rows. Removed lines red, added green (theme `toolDiff*`); context
-  dim full-width.
+  rows. Only the `-12` / `+12` gutter carries del/add red/green;
+  code keeps syntax colors (a full-line fg wash would be cancelled
+  by the highlighter's inner resets anyway). Context dim full-width.
+- Pi paints every tool block with `toolSuccessBg` behind `renderShell:
+  "self"` too, so that token is neutral `raised #101214` (was a green
+  tint that muddied syntax colors). `toolErrorBg` keeps its red tint.
 - Syntax colors: each side highlighted as one block via
   `highlightCode(text, getLanguageFromPath(path))`, mapped back per
   line (line count preserved). Unknown language → plain.

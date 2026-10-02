@@ -83,6 +83,19 @@ function padCell(cell: string, width: number): string {
 	return cell + " ".repeat(Math.max(0, width - visibleWidth(cell)));
 }
 
+// Gutter (`-12` / `+12`) carries the del/add color; code keeps its
+// syntax colors. A full-line fg wash would be cancelled anyway by the
+// highlighter's inner resets, and reads worse on the tool tint.
+function gutterLine(
+	theme: Theme,
+	prefix: string,
+	cell: Cell,
+	color: "toolDiffRemoved" | "toolDiffAdded",
+	width: number,
+): string {
+	return truncateToWidth(`${theme.fg(color, `${prefix}${cell.num}`)} ${cell.content}`, width);
+}
+
 class SideBySideDiff implements Component {
 	constructor(
 		private readonly theme: Theme,
@@ -110,18 +123,18 @@ class SideBySideDiff implements Component {
 				out.push(theme.fg("toolDiffContext", truncateToWidth(`  ${row.cell.num} ${row.cell.content}`, width)));
 				continue;
 			}
-			const leftRaw = row.left ? `-${row.left.num} ${row.left.content}` : "";
-			const rightRaw = row.right ? `+${row.right.num} ${row.right.content}` : "";
+			const leftRaw = row.left ? { num: row.left.num, content: row.left.content } : undefined;
+			const rightRaw = row.right ? { num: row.right.num, content: row.right.content } : undefined;
 			if (narrow) {
-				if (row.left) out.push(theme.fg("toolDiffRemoved", truncateToWidth(leftRaw, width)));
-				if (row.right) out.push(theme.fg("toolDiffAdded", truncateToWidth(rightRaw, width)));
+				if (leftRaw) out.push(gutterLine(theme, "-", leftRaw, "toolDiffRemoved", width));
+				if (rightRaw) out.push(gutterLine(theme, "+", rightRaw, "toolDiffAdded", width));
 				continue;
 			}
-			const left = padCell(truncateToWidth(leftRaw, leftW), leftW);
-			const right = truncateToWidth(rightRaw, rightW);
-			out.push(
-				`${row.left ? theme.fg("toolDiffRemoved", left) : left}${sep}${row.right ? theme.fg("toolDiffAdded", right) : right}`,
-			);
+			const left = leftRaw
+				? padCell(gutterLine(theme, "-", leftRaw, "toolDiffRemoved", leftW), leftW)
+				: " ".repeat(leftW);
+			const right = rightRaw ? gutterLine(theme, "+", rightRaw, "toolDiffAdded", rightW) : "";
+			out.push(`${left}${sep}${right}`);
 		}
 		if (this.hidden > 0) {
 			out.push(theme.fg("dim", `... ${this.hidden} more lines — view in PR`));

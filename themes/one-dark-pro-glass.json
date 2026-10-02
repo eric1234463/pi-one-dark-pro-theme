@@ -23,7 +23,6 @@
 		"yellow": "#D18F52",
 		"cyan": "#42B3C2",
 		"thumb": "#4E5666",
-		"toolSuccessBg": "#1A2B20",
 		"toolErrorBg": "#2C1D22"
 	},
 	"colors": {
@@ -47,7 +46,7 @@
 		"customMessageText": "muted",
 		"customMessageLabel": "accent",
 		"toolPendingBg": "raised",
-		"toolSuccessBg": "toolSuccessBg",
+		"toolSuccessBg": "raised",
 		"toolErrorBg": "toolErrorBg",
 		"toolTitle": "text",
 		"toolOutput": "muted",
