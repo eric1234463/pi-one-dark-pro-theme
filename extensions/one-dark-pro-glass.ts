@@ -78,7 +78,7 @@ class BlockEditor extends CustomEditor {
 	}
 }
 
-type GitState = { status: string };
+type GitState = { status: string; branch: string | null };
 type BatteryState = { text: string };
 
 function parsePorcelain(out: string): string {
@@ -119,12 +119,13 @@ async function fetchLimits(): Promise<string | undefined> {
 }
 
 async function readGit(pi: ExtensionAPI, cwd: string): Promise<GitState> {
-	const result = await pi
-		.exec("git", ["status", "--porcelain=v1", "-b"], { cwd, timeout: 2000 })
-		.catch(() => undefined);
-	const stdout = result?.stdout ?? "";
-	if (!result || result.code !== 0) return { status: "" };
-	return { status: parsePorcelain(stdout) };
+	const [porcelain, branch] = await Promise.all([
+		pi.exec("git", ["status", "--porcelain=v1", "-b"], { cwd, timeout: 2000 }).catch(() => undefined),
+		pi.exec("git", ["branch", "--show-current"], { cwd, timeout: 2000 }).catch(() => undefined),
+	]);
+	if (!porcelain || porcelain.code !== 0) return { status: "", branch: null };
+	const name = branch && branch.code === 0 ? branch.stdout.trim() : "";
+	return { status: parsePorcelain(porcelain.stdout ?? ""), branch: name || null };
 }
 
 async function readBattery(pi: ExtensionAPI): Promise<BatteryState> {
@@ -184,7 +185,7 @@ export default function (pi: ExtensionAPI) {
 		);
 
 		let tuiRef: TUI | undefined;
-		let git: GitState = { status: "" };
+		let git: GitState = { status: "", branch: null };
 		let battery: BatteryState = { text: "" };
 		let limits: string | undefined;
 
@@ -222,15 +223,16 @@ export default function (pi: ExtensionAPI) {
 					const block = (text: string, fg: Color, bg: Color): string =>
 						theme.style(` ${text} `, { fg, bg, bold: true });
 					const trans = (from: Color, to: Color): string =>
-						theme.style("", { fg: from, bg: to });
+						theme.style("", { fg: from, bg: to });
 
 					const user = process.env.USER ?? "eric";
-					let line = block(`${user}`, pal.mono0, pal.surface0);
+					let line = theme.style("\ue0b6", { fg: pal.surface0 });
+					line += block(`\uf035 ${user}`, pal.mono0, pal.surface0);
 					line += trans(pal.surface0, pal.surface1);
 
 					line += block(`󰉋 ${shortCwd(ctx.cwd)}`, pal.blue, pal.surface1);
 
-					const branch = footerData.getGitBranch();
+					const branch = footerData.getGitBranch() ?? git.branch;
 					if (branch) {
 						const gitText = git.status ? ` ${branch} ${git.status}` : ` ${branch}`;
 						line += theme.style(` ${gitText} `, {
@@ -267,7 +269,7 @@ export default function (pi: ExtensionAPI) {
 					const tail: string[] = [`󰥔 ${timeFmt.format(new Date())}`];
 					if (battery.text) tail.push(battery.text);
 					line += block(tail.join(" "), pal.blue, pal.surface0);
-					line += theme.style("", { fg: pal.surface0 });
+					line += theme.style("", { fg: pal.surface0 });
 
 					return [truncateToWidth(line, width)];
 				},
