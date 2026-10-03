@@ -9,9 +9,10 @@ background-filled input block + compact tool output.
 ├── package.json                  # pi-package manifest (keywords, peerDeps, pi.extensions/themes)
 ├── themes/one-dark-pro-glass.json
 ├── extensions/one-dark-pro-glass.ts   # input block + custom footer
+├── extensions/render-shared.ts        # shared tool-render helpers (NOT an extension)
 ├── extensions/compact-output.ts       # one-line read-only tool results
 ├── extensions/diff-view.ts            # side-by-side edit diffs
-├── docs/spec.md                  # design spec + decision log (D1–D7)
+├── docs/spec.md                  # design spec + decision log (D1–D9)
 └── README.md
 ```
 
@@ -32,7 +33,8 @@ background-filled input block + compact tool output.
 - All 52 required `colors` roles present (see `theme-schema.json`).
   `searchMatchBg`/`searchMatchText` may be omitted (documented
   fallbacks); `export` is explicit (`pageBg`/`cardBg`/`infoBg`).
-- Hex only (`#RGB`/`#RRGGBB`) — no alpha, no `oklch`/`okhsl` here.
+- `okhsl()` first (like built-in `dark.json`), hex accepted.
+  Every value must parse via pi-tui `parseColor`.
   Keep `vars` indirection acyclic; every `colors`/`export` ref must
   resolve.
 - Slot discipline: `theme.style()` only accepts fg tokens in `fg` and
@@ -47,17 +49,23 @@ background-filled input block + compact tool output.
   (runtime works, `tsc` breaks). `Text`/`truncateToWidth` come from
   `@earendil-works/pi-tui`.
 - `one-dark-pro-glass.ts`:
+  - TUI-only: return early unless `ctx.mode === "tui"` (RPC has no
+    custom terminal rendering; `hasUI` alone is not enough).
   - `BlockEditor extends CustomEditor`, `{ paddingX: 1 }`. Do NOT
     clamp `setPaddingX` — `/settings` → `editorPaddingX` (0–3) is live.
   - Fill via `theme.bg("userMessageBg", line)`; re-open bg after every
     `\x1b[0m` (the block cursor emits a full reset mid-line).
     Read theme live per render (`() => ctx.ui.theme`).
-  - Footer is one ` | `-separated line (D1). Branch from
+  - Footer is powerline blocks (D8). Branch from
     `footerData.getGitBranch()`; status from
     `git status --porcelain=v1 -b` (2s timeout). Time in HKT.
     Battery hidden when unavailable. Limits segment hidden until
     `fetchLimits()` has a real source (D4, spec §6.3) — never `0%`.
-  - Guard everything behind `ctx.hasUI`; non-TUI returns early.
+  - Narrow widths drop middle segments by priority (limits → cost →
+    CH → ctx → model → branch → cwd); user/time anchors stay.
+    `NO_NERD_FONT`/`PI_NO_NERD_FONT`=1 selects the ASCII fallback.
+  - Session cost + cache-hit are cached in `refresh()` (turn/branch/
+    interval); only context % is read live per render.
 - `diff-view.ts`:
   - Same-name `registerTool` over `createEditToolDefinition(cwd)` +
     `renderShell: "self"`. Overrides `edit` only.
@@ -70,6 +78,12 @@ background-filled input block + compact tool output.
     overriding only `renderCall`/`renderResult` + `renderShell: "self"`.
     Execution untouched. Only read-only tools (`read`/`bash`/`grep`/
     `find`/`ls`) — never `edit`/`write` (diffs stay visible).
+  - Shared helpers live in `render-shared.ts`, imported relatively
+    with the explicit `.ts` suffix (`./render-shared.ts`). That file
+    is NOT an extension: no default export, no `package.json` entry.
+  - Collapsed counts prefer `details.truncation` metadata; bash exit
+    code still parses from model-facing text (`BashToolDetails` has
+    no status field).
   - Errors show first line in error color; `ctrl+e` expands to 15–20
     dim lines + `... N more`.
 - `pi.exec` returns `{ stdout, code }` — the field is **`code`**,

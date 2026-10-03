@@ -8,8 +8,9 @@ via the Otty port).
 
 ## What you get
 
-- **Theme** (`themes/one-dark-pro-glass.json`) — near-black `#080909`
-  glass palette, One Dark Pro syntax colors.
+- **Theme** (`themes/one-dark-pro-glass.json`) — near-black glass
+  palette in `okhsl()` (Pi 1.0 style, converted from the `#080909`
+  originals), One Dark Pro syntax colors.
 - **Statusline** — powerline footer blocks like the terminal bar:
 
 ```text
@@ -19,14 +20,19 @@ via the Otty port).
 
   workdir, git branch + status counts, model + thinking level, context
   usage, cache-hit rate, session cost, HKT time + battery. Needs a Nerd
-  Font (e.g. JetBrainsMono Nerd Font).
+  Font (e.g. JetBrainsMono Nerd Font); `NO_NERD_FONT=1` falls back to
+  ASCII. Narrow terminals drop segments by priority, keeping the
+  user/time anchors.
 - **Input block** — accent `─` borders on a `#101214` background fill,
   1-cell inner padding (adjustable via `/settings` → `editorPaddingX`,
   0–3).
 - **Compact output** (`extensions/compact-output.ts`) — result-oriented
   transcript: `read`/`bash`/`grep`/`find`/`ls` collapse to one line
   (e.g. `$ pnpm test` → `✓ done (12 lines)`), full content on expand
-  (`ctrl+e`). `edit`/`write` diffs stay visible.
+  (`ctrl+e`). Counts use the tools' truncation metadata, with a
+  `(truncated)` marker when the output was cut. `edit`/`write` diffs
+  stay visible. Shares helpers with the diff view via
+  `extensions/render-shared.ts` (not an extension, not toggleable).
 - **Diff view** (`extensions/diff-view.ts`) — `edit` renders side-by-side
   old | new columns with syntax colors (falls back to unified below
   90 cols). Past 100 rows collapses to `... N more — view in PR`;
@@ -58,9 +64,10 @@ pi -e ./extensions/one-dark-pro-glass.ts --theme ./themes --use-theme one-dark-p
 ├── package.json            # pi-package manifest
 ├── themes/one-dark-pro-glass.json
 ├── extensions/one-dark-pro-glass.ts   # statusline + input block
+├── extensions/render-shared.ts        # shared tool-render helpers
 ├── extensions/compact-output.ts       # one-line tool results
 ├── extensions/diff-view.ts            # side-by-side edit diffs
-└── docs/spec.md            # design spec + decision log (D1–D7)
+└── docs/spec.md            # design spec + decision log (D1–D9)
 ```
 
 No runtime dependencies. Host packages

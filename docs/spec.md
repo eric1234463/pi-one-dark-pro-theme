@@ -21,6 +21,13 @@ Scope is deliberately narrow:
 
 Decisions (user-confirmed):
 
+- D9 — Pi 1.0 refactor: keep the powerline footer and the two
+  separately-toggleable tool renderers; theme values as `okhsl()`
+  (dark-only, same glass look); shared helpers in
+  `extensions/render-shared.ts` (not an extension, no manifest entry);
+  plus rough-edge fixes: priority-based footer truncation, Nerd Font
+  ASCII fallback, session totals cached outside the render path,
+  `ctx.mode === "tui"` guard, truncation-aware collapsed counts.
 - D1 — footer style: ~~plain segments~~ superseded by D8 below.
 - D2 — input box: ~~borderless~~ superseded by D5 below.
 - D3 — extras: git status counts, session cost, time + battery — all on.
@@ -52,6 +59,7 @@ pi-one-dark-pro-glass-theme/
 │   └── one-dark-pro-glass.json
 ├── extensions/
 │   ├── one-dark-pro-glass.ts  # input block + starship footer
+│   ├── render-shared.ts        # shared tool-render helpers (not an extension)
 │   └── compact-output.ts       # one-line read-only tool results
 ├── docs/
 │   └── spec.md             # this file
@@ -84,6 +92,9 @@ pi-one-dark-pro-glass-theme/
   terminal during review): red `#E06C75`, green `#98C379`, yellow
   `#E5C07B`, blue `#61AFEF`, purple `#C678DD`, cyan `#56B6C2`,
   comment `#5C6370`, orange `#D19A66`.
+- Values are `okhsl()` (D9, converted from the hex originals via
+  pi-tui's own `parseColor`/`colorToOkhsl`; round-trips within 1 bit).
+  Dark-only; `appearance: dark`.
 - Mapping to required Pi theme roles (`theme-schema.json`):
 
 | Pi role                              | Value source                          |
@@ -121,8 +132,9 @@ pi-one-dark-pro-glass-theme/
   emits a full `\x1b[0m` mid-line — bg is re-opened after each one.
 - Theme is read live per render (`() => ctx.ui.theme`), so `/settings`
   theme switches apply with no stored ANSI.
-- Guard: installed only when `ctx.hasUI`; RPC/JSON/print paths return
-  early.
+- Guard: installed only when `ctx.mode === "tui"` (D9). RPC has
+  dialogs but no custom terminal rendering, so `hasUI` alone is not
+  enough; JSON/print paths return early.
 
 ## 6. Statusline
 
@@ -140,7 +152,10 @@ Blocks: user (mono0 on surface0) →  → content items on surface1
 threshold, CH/cost dim) →  → time+battery (blue on surface0) →
 closing . Same-bg items are space-separated inside one block,
 like the terminal bar. `provider/` prefix only when >1 provider.
-Overflow truncates from the right (time drops first).
+Overflow drops middle segments by priority (D9: limits → cost → CH →
+ctx → model → branch → cwd); the user/time anchors always stay, with
+`truncateToWidth` as the final guard. `NO_NERD_FONT=1` (or
+`PI_NO_NERD_FONT=1`) swaps powerline/Nerd Font glyphs for ASCII.
 
 Git status comes from
 `git status --porcelain=v1 -b` (staged/modified/untracked/ahead/behind,
@@ -151,6 +166,9 @@ change, plus 10 s interval.
 
 ### 6.2 Field rules
 
+- Session cost + cache-hit rate are computed in `refresh()`
+  (session start, `turn_end`, `model_select`, branch change, 10 s
+  interval), not per render; only context % reads live (D9).
 - `5h`: session-window utilization. `W`: weekly-window utilization.
   Percentages = used (not remaining), rounded to whole numbers.
 - Conditional display: both windows → `5h N% · W N%`; one window →
@@ -202,7 +220,15 @@ select theme in `/settings`, done.
 - O2: yes, effort = thinking level.
 - O3: used-% (moot while limits hidden).
 
-## 10. Compact output (D6)
+## 10. Compact output (D6, D9)
+
+- Shared helpers (`firstText`, `errorLine`, `expandedBlock`,
+  `truncationMarker`, `totalLines`, `shortCommand`, `shortenPath`) live
+  in `extensions/render-shared.ts`, imported as `./render-shared.ts`.
+- Collapsed counts prefer `details.truncation` metadata (exact totals
+  even when the model-facing text was cut); a `(truncated)` marker
+  shows when the tool cut server-side. Bash exit code still parses
+  from the model-facing text — `BashToolDetails` carries no status.
 
 - New file `extensions/compact-output.ts`, separate manifest entry so
   it can be disabled independently via `pi config`.
@@ -218,7 +244,7 @@ select theme in `/settings`, done.
   `... N more`.
 - Verified: overridden definitions execute correctly in `-p` mode.
 
-## 11. Side-by-side edit diffs (D7)
+## 11. Side-by-side edit diffs (D7, D9)
 
 - New file `extensions/diff-view.ts`, separate manifest entry
   (independently toggleable via `pi config`). Overrides `edit` only;
@@ -248,3 +274,5 @@ select theme in `/settings`, done.
   comes from `context.args`, not the result.
 - Verified: real `edit` in `-p` mode applies + renders without error.
   TUI column alignment needs eyeball check.
+- Error/first-text handling reuses `render-shared.ts` (D9); the
+  side-by-side layout itself is unchanged.

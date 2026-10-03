@@ -6,14 +6,15 @@ import {
 	type Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { Component, Color, EditorTheme, TUI } from "@earendil-works/pi-tui";
-import { parseColor, truncateToWidth } from "@earendil-works/pi-tui";
+import { parseColor, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
 // One Dark Pro Glass statusline + input block.
 //
 // Footer: powerline blocks mirroring the starship bar (surface0 user
 // block, surface1 content block, surface0 time block,  separators).
-// Limits segment is hidden until a provider usage source exists (see
-// fetchLimits).
+// Segments drop by priority on narrow widths (user/time anchors stay);
+// set NO_NERD_FONT=1 for an ASCII fallback. Limits segment is hidden
+// until a provider usage source exists (see fetchLimits).
 // Editor: 1-cell side padding, accent borders, full-block userMessageBg fill.
 
 // Starship one_dark_pro_glass palette (verbatim from starship.toml).
@@ -28,6 +29,22 @@ const pal: Record<string, Color> = {
 	yellow: parseColor("#e5c07b"),
 	red: parseColor("#ff616e"),
 	dim: parseColor("#828997"),
+};
+
+const nerdFont = !process.env.NO_NERD_FONT && !process.env.PI_NO_NERD_FONT;
+
+const glyph = {
+	capL: nerdFont ? "" : "",
+	sep: nerdFont ? "\ue0b4" : "",
+	capR: nerdFont ? "\ue0b4" : "",
+	dir: nerdFont ? "󰉋" : "",
+	branch: nerdFont ? "" : "git:",
+	staged: nerdFont ? "󰐕" : "+",
+	modified: nerdFont ? "󰷫" : "~",
+	untracked: nerdFont ? "" : "?",
+	time: nerdFont ? "󰥔" : "",
+	battery: nerdFont ? "󰁹" : "",
+	plainSep: " | ",
 };
 
 const timeFmt = new Intl.DateTimeFormat("en-HK", {
@@ -103,9 +120,9 @@ function parsePorcelain(out: string): string {
 		}
 	}
 	const parts: string[] = [];
-	if (staged > 0) parts.push(`󰐕${staged}`);
-	if (modified > 0) parts.push(`󰷫${modified}`);
-	if (untracked > 0) parts.push(`${untracked}`);
+	if (staged > 0) parts.push(`${glyph.staged}${staged}`);
+	if (modified > 0) parts.push(`${glyph.modified}${modified}`);
+	if (untracked > 0) parts.push(`${glyph.untracked}${untracked}`);
 	if (ahead > 0) parts.push(`⇡${ahead}`);
 	if (behind > 0) parts.push(`⇣${behind}`);
 	return parts.join(" ");
@@ -133,7 +150,7 @@ async function readBattery(pi: ExtensionAPI): Promise<BatteryState> {
 		const result = await pi.exec("pmset", ["-g", "batt"], { timeout: 2000 }).catch(() => undefined);
 		const m = result?.stdout.match(/(\d+)%;\s*(charging|discharging|charged)/);
 		if (!m) return { text: "" };
-		return { text: `󰁹 ${m[1]}%` };
+		return { text: `${glyph.battery} ${m[1]}%` };
 	}
 	if (process.platform === "linux") {
 		const result = await pi
@@ -143,7 +160,7 @@ async function readBattery(pi: ExtensionAPI): Promise<BatteryState> {
 			.catch(() => undefined);
 		const pct = result?.stdout.trim();
 		if (!pct || !/^\d+$/.test(pct)) return { text: "" };
-		return { text: `󰁹 ${pct}%` };
+		return { text: `${glyph.battery} ${pct}%` };
 	}
 	return { text: "" };
 }
@@ -176,9 +193,19 @@ function cacheHitRate(ctx: ExtensionContext): number | undefined {
 	return undefined;
 }
 
+// A middle content item. priority: lowest drops first on narrow widths.
+// The user/time anchors are not items, so they are never dropped.
+interface Item {
+	text: string;
+	fg: Color;
+	priority: number;
+}
+
 export default function (pi: ExtensionAPI) {
 	pi.on("session_start", (_event, ctx) => {
-		if (!ctx.hasUI) return;
+		// Footer/editor are TUI components; RPC has dialogs but no custom
+		// terminal rendering, and print/JSON have no UI at all.
+		if (ctx.mode !== "tui") return;
 
 		ctx.ui.setEditorComponent(
 			(tui, theme, keybindings) => new BlockEditor(tui, theme, keybindings, () => ctx.ui.theme),
@@ -188,6 +215,8 @@ export default function (pi: ExtensionAPI) {
 		let git: GitState = { status: "", branch: null };
 		let battery: BatteryState = { text: "" };
 		let limits: string | undefined;
+		let cost = 0;
+		let cacheHit: number | undefined;
 
 		const refresh = async () => {
 			const [g, b, l] = await Promise.all([
@@ -198,6 +227,10 @@ export default function (pi: ExtensionAPI) {
 			git = g;
 			battery = b;
 			limits = l;
+			// Session totals change only on turn boundaries, so cache them
+			// here instead of re-walking the branch on every render.
+			cost = sessionCost(ctx);
+			cacheHit = cacheHitRate(ctx);
 			tuiRef?.requestRender();
 		};
 		void refresh();
@@ -209,7 +242,7 @@ export default function (pi: ExtensionAPI) {
 
 		ctx.ui.setFooter((tui, theme, footerData) => {
 			tuiRef = tui;
-			const offBranch = footerData.onBranchChange(rerender);
+			const offBranch = footerData.onBranchChange(() => void refresh());
 			return {
 				dispose: () => {
 					clearInterval(timer);
@@ -220,25 +253,21 @@ export default function (pi: ExtensionAPI) {
 				},
 				invalidate() {},
 				render(width: number): string[] {
-					const block = (text: string, fg: Color, bg: Color): string =>
-						theme.style(` ${text} `, { fg, bg, bold: true });
-					const trans = (from: Color, to: Color): string =>
-						theme.style("", { fg: from, bg: to });
+					const usage = ctx.getContextUsage();
+					const window = usage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
 
-					const user = process.env.USER ?? "eric";
-					let line = theme.style("\ue0b6", { fg: pal.surface0 });
-					line += block(`\uf035 ${user}`, pal.mono0, pal.surface0);
-					line += trans(pal.surface0, pal.surface1);
-
-					line += block(`󰉋 ${shortCwd(ctx.cwd)}`, pal.blue, pal.surface1);
+					const middle: Item[] = [
+						{ text: `${glyph.dir} ${shortCwd(ctx.cwd)}`, fg: pal.blue, priority: 90 },
+					];
 
 					const branch = footerData.getGitBranch() ?? git.branch;
 					if (branch) {
-						const gitText = git.status ? ` ${branch} ${git.status}` : ` ${branch}`;
-						line += theme.style(` ${gitText} `, {
+						middle.push({
+							text: git.status
+								? `${glyph.branch} ${branch} ${git.status}`
+								: `${glyph.branch} ${branch}`,
 							fg: pal.green,
-							bg: pal.surface1,
-							bold: true,
+							priority: 80,
 						});
 					}
 
@@ -247,29 +276,64 @@ export default function (pi: ExtensionAPI) {
 							footerData.getAvailableProviderCount() > 1 ? `(${ctx.model.provider}) ` : "";
 						const thinking = pi.getThinkingLevel();
 						const effort = thinking === "off" ? "thinking off" : thinking;
-						line += block(`${multi}${ctx.model.id} · ${effort}`, pal.purple, pal.surface1);
+						middle.push({
+							text: `${multi}${ctx.model.id} · ${effort}`,
+							fg: pal.purple,
+							priority: 70,
+						});
 					}
 
-					const usage = ctx.getContextUsage();
-					const window = usage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
 					if (usage && usage.percent !== null && usage.percent !== undefined) {
 						const pct = Math.round(usage.percent);
-						const fg = pct > 90 ? pal.red : pct > 70 ? pal.yellow : pal.green;
-						line += block(`ctx ${pct}%/${formatTokens(window)}`, fg, pal.surface1);
+						middle.push({
+							text: `ctx ${pct}%/${formatTokens(window)}`,
+							fg: pct > 90 ? pal.red : pct > 70 ? pal.yellow : pal.green,
+							priority: 50,
+						});
 					}
-					const ch = cacheHitRate(ctx);
-					if (ch !== undefined) line += block(`CH${ch.toFixed(0)}%`, pal.dim, pal.surface1);
+					if (cacheHit !== undefined) {
+						middle.push({ text: `CH${cacheHit.toFixed(0)}%`, fg: pal.dim, priority: 30 });
+					}
+					if (cost > 0) {
+						middle.push({ text: `$${cost.toFixed(3)}`, fg: pal.dim, priority: 20 });
+					}
+					if (limits) middle.push({ text: limits, fg: pal.dim, priority: 10 });
 
-					const cost = sessionCost(ctx);
-					if (cost > 0) line += block(`$${cost.toFixed(3)}`, pal.dim, pal.surface1);
-
-					if (limits) line += block(limits, pal.dim, pal.surface1);
-
-					line += trans(pal.surface1, pal.surface0);
-					const tail: string[] = [`󰥔 ${timeFmt.format(new Date())}`];
+					const tail: string[] = [`${glyph.time} ${timeFmt.format(new Date())}`.trim()];
 					if (battery.text) tail.push(battery.text);
+
+					// Drop lowest-priority middle items until the plain-text
+					// estimate fits; user/time anchors always stay.
+					const user = process.env.USER ?? "eric";
+					const chrome = 8 + visibleWidth(tail.join(" ")) + visibleWidth(user) + 4;
+					let items = middle;
+					while (items.length > 0) {
+						const estimate =
+							chrome + items.reduce((n, item) => n + visibleWidth(item.text) + 2, 0);
+						if (estimate <= width) break;
+						const drop = [...items].sort((a, b) => a.priority - b.priority)[0];
+						items = items.filter((item) => item !== drop);
+					}
+
+					if (!nerdFont) {
+						const parts = [user, ...items.map((i) => i.text), tail.join(" ")];
+						return [truncateToWidth(parts.join(glyph.plainSep), width)];
+					}
+
+					const block = (text: string, fg: Color, bg: Color): string =>
+						theme.style(` ${text} `, { fg, bg, bold: true });
+					const trans = (from: Color, to: Color): string =>
+						theme.style(glyph.sep, { fg: from, bg: to });
+
+					let line = theme.style(glyph.capL, { fg: pal.surface0 });
+					line += block(`\uf035 ${user}`, pal.mono0, pal.surface0);
+					line += trans(pal.surface0, pal.surface1);
+					for (const item of items) {
+						line += block(item.text, item.fg, pal.surface1);
+					}
+					line += trans(pal.surface1, pal.surface0);
 					line += block(tail.join(" "), pal.blue, pal.surface0);
-					line += theme.style("", { fg: pal.surface0 });
+					line += theme.style(glyph.capR, { fg: pal.surface0 });
 
 					return [truncateToWidth(line, width)];
 				},

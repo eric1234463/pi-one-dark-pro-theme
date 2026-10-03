@@ -10,6 +10,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
 import { Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { errorLine, firstText } from "./render-shared.ts";
 
 // Side-by-side diff view for edits.
 //
@@ -159,11 +160,9 @@ export default function (pi: ExtensionAPI) {
 		renderResult(result, { expanded, isPartial }, theme, context) {
 			if (isPartial) return new Text(theme.fg("warning", "Editing..."), 0, 0);
 
-			const content = result.content[0];
-			const text = content?.type === "text" ? content.text : "";
+			const text = firstText(result);
 			if (result.isError || text.startsWith("Error")) {
-				const first = text.split("\n").find((line) => line.trim() !== "") ?? "Error";
-				return new Text(theme.fg("error", first), 0, 0);
+				return errorLine(theme, text);
 			}
 
 			const diff = (result.details as EditToolDetails | undefined)?.diff;

@@ -1,4 +1,4 @@
-import type { AgentToolResult, ExtensionAPI, Theme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
 	createBashToolDefinition,
 	createFindToolDefinition,
@@ -7,6 +7,16 @@ import {
 	createReadToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
+import {
+	errorLine,
+	expandedBlock,
+	firstText,
+	isErrorResult,
+	nonEmptyLines,
+	shortCommand,
+	totalLines,
+	truncationMarker,
+} from "./render-shared.ts";
 
 // Compact output: result-oriented transcript.
 //
@@ -14,40 +24,10 @@ import { Text } from "@earendil-works/pi-tui";
 //   `$ pnpm test` → `✓ done (12 lines)`
 // Full content returns on expand (ctrl+e). edit/write are untouched so
 // code diffs stay visible. renderShell "self" drops the box chrome.
-
-type ToolResult = AgentToolResult;
-
-function firstText(result: ToolResult): string {
-	const content = result.content[0];
-	return content?.type === "text" ? content.text : "";
-}
-
-function isError(result: ToolResult, text: string): boolean {
-	return result.isError || text.startsWith("Error");
-}
-
-function nonEmptyLines(text: string): string[] {
-	return text.split("\n").filter((line) => line.trim() !== "");
-}
-
-function errorLine(theme: Theme, text: string): Text {
-	return new Text(theme.fg("error", nonEmptyLines(text)[0] ?? "Error"), 0, 0);
-}
-
-function expandedLines(theme: Theme, head: string, lines: string[], total: number, cap: number): Text {
-	let text = head;
-	for (const line of lines.slice(0, cap)) {
-		text += `\n${theme.fg("dim", line)}`;
-	}
-	if (total > cap) {
-		text += `\n${theme.fg("muted", `... ${total - cap} more`)}`;
-	}
-	return new Text(text, 0, 0);
-}
-
-function shortCommand(cmd: string, max = 80): string {
-	return cmd.length > max ? `${cmd.slice(0, max - 3)}...` : cmd;
-}
+//
+// Counts prefer the tool's details.truncation metadata (exact totals even
+// when the model-facing text was cut); the exit code still comes from the
+// model-facing text because BashToolDetails carries no status field.
 
 export default function (pi: ExtensionAPI) {
 	const cwd = process.cwd();
@@ -64,11 +44,16 @@ export default function (pi: ExtensionAPI) {
 		renderResult(result, { expanded, isPartial }, theme) {
 			if (isPartial) return new Text(theme.fg("warning", "Reading..."), 0, 0);
 			const text = firstText(result);
-			if (isError(result, text)) return errorLine(theme, text);
+			if (isErrorResult(result, text)) return errorLine(theme, text);
+			if (result.content[0]?.type === "image") {
+				return new Text(theme.fg("success", "Image loaded"), 0, 0);
+			}
 			const lines = nonEmptyLines(text);
-			const head = theme.fg("success", `${lines.length} lines`);
+			const head =
+				theme.fg("success", `${totalLines(text, result.details)} lines`) +
+				truncationMarker(theme, result.details);
 			if (!expanded) return new Text(head, 0, 0);
-			return expandedLines(theme, head, lines, lines.length, 15);
+			return expandedBlock(theme, head, lines, lines.length, 15);
 		},
 	});
 
@@ -84,7 +69,7 @@ export default function (pi: ExtensionAPI) {
 		renderResult(result, { expanded, isPartial }, theme) {
 			if (isPartial) return new Text(theme.fg("warning", "Running..."), 0, 0);
 			const text = firstText(result);
-			if (isError(result, text)) return errorLine(theme, text);
+			if (isErrorResult(result, text)) return errorLine(theme, text);
 			const exitMatch = text.match(/exit code: (\d+)/);
 			const exitCode = exitMatch ? Number(exitMatch[1]) : 0;
 			const lines = nonEmptyLines(text).filter((line) => !line.startsWith("exit code:"));
@@ -93,7 +78,7 @@ export default function (pi: ExtensionAPI) {
 					? theme.fg("success", "✓ done") + theme.fg("dim", ` (${lines.length} lines)`)
 					: theme.fg("error", `✗ exit ${exitCode}`) + theme.fg("dim", ` (${lines.length} lines)`);
 			if (!expanded) return new Text(head, 0, 0);
-			return expandedLines(theme, head, lines, lines.length, 20);
+			return expandedBlock(theme, head, lines, lines.length, 20);
 		},
 	});
 
@@ -110,14 +95,15 @@ export default function (pi: ExtensionAPI) {
 		renderResult(result, { expanded, isPartial }, theme) {
 			if (isPartial) return new Text(theme.fg("warning", "Searching..."), 0, 0);
 			const text = firstText(result);
-			if (isError(result, text)) return errorLine(theme, text);
+			if (isErrorResult(result, text)) return errorLine(theme, text);
 			const lines = nonEmptyLines(text);
 			const head =
 				lines.length === 0
 					? theme.fg("dim", "no matches")
-					: theme.fg("success", `${lines.length} matches`);
+					: theme.fg("success", `${lines.length} matches`) +
+						truncationMarker(theme, result.details);
 			if (!expanded) return new Text(head, 0, 0);
-			return expandedLines(theme, head, lines, lines.length, 15);
+			return expandedBlock(theme, head, lines, lines.length, 15);
 		},
 	});
 
@@ -133,11 +119,12 @@ export default function (pi: ExtensionAPI) {
 		renderResult(result, { expanded, isPartial }, theme) {
 			if (isPartial) return new Text(theme.fg("warning", "Finding..."), 0, 0);
 			const text = firstText(result);
-			if (isError(result, text)) return errorLine(theme, text);
+			if (isErrorResult(result, text)) return errorLine(theme, text);
 			const lines = nonEmptyLines(text);
-			const head = theme.fg("success", `${lines.length} paths`);
+			const head =
+				theme.fg("success", `${lines.length} paths`) + truncationMarker(theme, result.details);
 			if (!expanded) return new Text(head, 0, 0);
-			return expandedLines(theme, head, lines, lines.length, 15);
+			return expandedBlock(theme, head, lines, lines.length, 15);
 		},
 	});
 
@@ -153,11 +140,12 @@ export default function (pi: ExtensionAPI) {
 		renderResult(result, { expanded, isPartial }, theme) {
 			if (isPartial) return new Text(theme.fg("warning", "Listing..."), 0, 0);
 			const text = firstText(result);
-			if (isError(result, text)) return errorLine(theme, text);
+			if (isErrorResult(result, text)) return errorLine(theme, text);
 			const lines = nonEmptyLines(text);
-			const head = theme.fg("success", `${lines.length} entries`);
+			const head =
+				theme.fg("success", `${lines.length} entries`) + truncationMarker(theme, result.details);
 			if (!expanded) return new Text(head, 0, 0);
-			return expandedLines(theme, head, lines, lines.length, 15);
+			return expandedBlock(theme, head, lines, lines.length, 15);
 		},
 	});
 }
